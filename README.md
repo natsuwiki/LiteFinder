@@ -1,36 +1,113 @@
-[![](https://img.shields.io/github/actions/workflow/status/jacobsjo/mc-datapack-map/pages.yml)](https://github.com/jacobsjo/mc-datapack-map/actions)
-[![map.jacobsjo.eu](https://img.shields.io/github/deployments/jacobsjo/mc-datapack-map/github-pages?label=map.jacobsjo.eu)](https://map.jacobsjo.eu)
-[![](https://img.shields.io/github/issues-raw/jacobsjo/mc-datapack-map)](https://github.com/jacobsjo/mc-datapack-map/issues)
-[![](https://img.shields.io/badge/sponsor-jacobsjo-blue)](https://github.com/sponsors/jacobsjo)
-[![](https://weblate.catter.dev/widget/jacobsjo/mc-datapack-map/svg-badge.svg)](https://weblate.catter.dev/projects/jacobsjo/mc-datapack-map/)
-</a>
+# Kelebot Gen2 Finder
+## 固定配置
 
-## Use online at https://map.jacobsjo.eu 
+- 种子: `877470420230587172`
+- 版本: `1.21.7`
+- 数据包: `Tectonic 3.0.13`
+- 世界类型: 默认
 
---------
+## 安装
 
-# MC Datapack Map
+```bash
+npm install
+```
 
-|   |   |
-|---|---|
-| [![](public/favicon.svg)](https://map.jacobsjo.eu) | A Leaflet based map to display Minecraft biome layouts and structures of vanilla and using worldgen datapacks.  |
-|   |  |
+## 添加数据包
 
-![](docs/header.png)
+将数据包 zip 文件直接放到项目根目录（与 `src-api` 同级），启动时会自动扫描加载。原版数据包放在 `public/vanilla_datapacks/`。
 
-# Translations
-Translate at https://weblate.catter.dev/projects/jacobsjo/mc-datapack-map/
+## 运行
 
-# Contributing
-Contributions are welcome! For significant feature additions please ask beforehand by opening an issue or on discord.
+```bash
+# 开发模式
+npm run dev
 
-## Setup dev environment:
+# 或直接运行
+npx tsx src/server.ts
+```
 
-1. Install python dependencies: `pip install -r requirements.txt`
-2. Install node dependencies: `npm i`
-3. Create vanilla datapack zip files: `npm run createZips`
-4. Start dev server: `npm run dev` and open http://localhost:5173/ 
-   - **dev environment requires a [browser supporting ECMAScript modules in webworkers](https://caniuse.com/mdn-api_worker_worker_ecmascript_modules)**
+## 多维度支持
 
-5. Build final page: `npm run build`
-6. Test build version: `npm run preview` and open https://localhost:4173/
+启动时会自动初始化主世界、下界、末地三个维度。所有 API 均支持 `dimension` 参数：
+
+- `minecraft:overworld`（默认）
+- `minecraft:the_nether`
+- `minecraft:the_end`
+
+`/api/locate/structure` 接口会根据结构 ID **自动识别所属维度**，无需手动指定。
+
+## API 接口
+
+所有接口均支持可选的 `dimension` 参数。
+
+### 查找最近的生物群系
+
+```http
+GET /api/locate?biome=minecraft:soul_sand_valley&x=0&z=0&dimension=minecraft:the_nether
+```
+
+响应：
+```json
+{
+  "found": true,
+  "biome": "minecraft:soul_sand_valley",
+  "x": 512,
+  "z": -256,
+  "y": 64,
+  "distance": 572,
+  "dimension": "minecraft:the_nether"
+}
+```
+
+### 查找最近的结构（自动识别维度）
+
+```http
+GET /api/locate/structure?structure=nova_structures:nether_keep&x=0&z=0
+```
+
+响应：
+```json
+{
+  "found": true,
+  "structureId": "nova_structures:nether_keep",
+  "x": 1024,
+  "z": 768,
+  "distance": 1267,
+  "dimension": "minecraft:the_nether",
+  "autoDimension": "minecraft:the_nether"
+}
+```
+
+### 其他接口
+
+```http
+GET /api/biome?x=0&z=0&y=64&dimension=minecraft:overworld
+GET /api/biomes/area?minX=-100&minZ=-100&maxX=100&maxZ=100&y=64&step=16
+GET /api/climate?x=0&z=0&y=64
+GET /api/find-biome?biome=minecraft:jungle&centerX=0&centerZ=0&maxRadius=6400
+GET /api/structures?dimension=minecraft:the_nether
+GET /api/structure?x=0&z=0&dimension=minecraft:overworld
+GET /api/structures/area?x=0&z=0&radius=1000&dimension=minecraft:overworld
+GET /api/status
+```
+
+## 配置
+
+配置文件位于 `src/config.ts`，包含：
+- 种子
+- MC 版本
+- 服务器端口
+
+数据包通过放入项目根目录自动加载，无需修改配置。
+
+olela啊
+olela
+## 许可证
+
+本项目用于学习和研究目的。 by kelemiao [kelemiao](https://github.com/kelemiao)
+
+## 相关链接
+
+- [deepslate](https://github.com/misode/deepslate) - Minecraft 世界生成库
+- [Tectonic](https://modrinth.com/datapack/tectonic) - 世界生成数据包
+- [Dungeons and Taverns](https://modrinth.com/datapack/dungeons-and-taverns) - 结构数据包
