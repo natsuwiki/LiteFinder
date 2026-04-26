@@ -1,9 +1,10 @@
-# Kelebot Gen2 Finder - 支持的功能列表
+# LiteFinder x1.2 - 支持的功能列表
 
-> 版本: 1.1.0  
+> 版本: x1.2（基于 KeleBot Finder Gen2）  
+> 作者: ONEGAME
 > Minecraft 版本: 1.21.7  
-> 数据包: Tectonic 3.0.13 + Dungeons and Taverns v4.7.3  
-> 更新日期: 2024-12-21
+> 数据包: `main_tectonic-datapack-3.0.13 (1).zip` + `Dungeons and Taverns v4.7.3.zip` + `Amplified_Nether_1.21_v1.2.11.zip` + `blooming-biosphere-v1.1.11.zip` + `Cliffs and Coves v1.3.1.zip` + `CliffTree 3.0.2 [1.21.5 - 1.21.10].zip` + `Navigable Rivers v1.5.0.zip` + `Nullscape_1.21_v1.2.14.zip` + `William Wythers' Overhauled Overworld v2.6.0.zip`
+> 更新日期: 2026-4-26
 
 ---
 
@@ -364,8 +365,23 @@
 
 ---
 
+## 其他数据包说明
+
+以下数据包主要影响地形生成和生物群系分布，不新增可查找的结构：
+
+| 数据包 | 主要作用 |
+|--------|---------|
+| Tectonic 3.0.13 | 大幅改造地形起伏与山脉生成 |
+| Amplified Nether v1.2.11 | 放大下界地形高度 |
+| Blooming Biosphere v1.1.11 | 扩展生物群系多样性 |
+| Cliffs and Coves v1.3.1 | 新增悬崖与海湾地形 |
+| CliffTree 3.0.2 | 在悬崖地形上生成树木 |
+| Navigable Rivers v1.5.0 | 改造河流使其可通航 |
+| Nullscape v1.2.14 | 改造末地地形 |
+| William Wythers' Overhauled Overworld v2.6.0 | 全面改造主世界生物群系与地形 |
+
 ## 备注
 
 1. DNT v4.7.3 使用 `nova_structures` 命名空间
-2. 不支持部分结构
-3. 所有 `minecraft:jigsaw` 类型的结构都被支持
+2. 矿井、海底神殿、废弃传送门、下界化石由于 deepslate 库限制无法查找
+3. 所有 `minecraft:jigsaw` 类型的结构均被支持
