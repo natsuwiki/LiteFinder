@@ -7,6 +7,41 @@
 - 相比原版 Gen2 降低了内存占用
 - 基于 [deepslate](https://github.com/misode/deepslate) 实现无需启动游戏的世界生成模拟
 
+## 安装
+
+1. **安装 Node.js**（推荐 v20+）
+   - 下载：https://nodejs.org/
+   - 验证：`node --version`
+
+2. **克隆或下载项目**
+   ```bash
+   git clone https://github.com/natsuwiki/LiteFinder.git
+   cd LiteFinder
+   ```
+
+3. **安装依赖**
+   ```bash
+   cd src-api
+   npm install
+   ```
+
+4. **添加数据包**
+   将 Minecraft 数据包 zip 文件放到 `src-api` 同级目录（项目根目录），启动时会自动扫描加载。
+
+   示例数据包：
+   - [Tectonic](https://modrinth.com/datapack/tectonic) — 地形生成
+   - [Dungeons and Taverns](https://modrinth.com/datapack/dungeons-and-taverns) — 地牢与酒馆结构
+
+5. **运行**
+   ```bash
+   cd src-api
+   npm run dev
+   # 或
+   npx tsx src/server.ts
+   ```
+
+服务默认运行在 `http://localhost:3000`。
+
 ## 固定配置
 
 - 种子: `877470420230587172`
@@ -147,6 +182,13 @@ GET /api/status
 
 - **LiteFinder** — ONEGAME
 - **KeleBot Finder Gen2**（底层基础）— [kelemiao](https://github.com/kelemiao)
+
+## 相关链接
+
+- [GitHub 仓库](https://github.com/natsuwiki/LiteFinder)
+- [deepslate](https://github.com/misode/deepslate) - Minecraft 世界生成库
+- [Tectonic](https://modrinth.com/datapack/tectonic) - 世界生成数据包
+- [Dungeons and Taverns](https://modrinth.com/datapack/dungeons-and-taverns) - 结构数据包
 
 ## 相关链接
 
