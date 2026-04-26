@@ -5,7 +5,6 @@ import {
   DatapackLoader,
   StructureFinder,
   parseSeed,
-  getCustomDensityFunction,
   buildStructureDimensionMap,
   DIMENSIONS,
   type DimensionId,
@@ -69,17 +68,15 @@ export async function initializeCalculator(): Promise<void> {
       const dimensionId = Identifier.parse(dim);
       const dimensionData = await datapackLoader.loadDimensionAndSave(dimensionId, worldPresetId);
 
-      // 生物群系计算器
+      // 生物群系计算器（仅用于结构查找的 sampler，不加载地形密度函数）
       const calculator = new BiomeCalculator();
-      const surfaceDfId = getCustomDensityFunction("snowcapped_surface", dimensionData.noiseSettingsId, dimensionId);
-      const terrainDfId = getCustomDensityFunction("map_simple_terrain", dimensionData.noiseSettingsId, dimensionId);
       calculator.initialize({
         biomeSourceJson: dimensionData.biomeSourceJson,
         noiseGeneratorSettingsJson: dimensionData.noiseSettingsJson,
         densityFunctions: dimensionData.densityFunctions,
         noises: dimensionData.noises,
-        surfaceDensityFunctionId: surfaceDfId?.toString(),
-        terrainDensityFunctionId: terrainDfId?.toString(),
+        surfaceDensityFunctionId: undefined,
+        terrainDensityFunctionId: undefined,
         seed: seedBigInt,
       });
       biomeCalculators.set(dim, calculator);

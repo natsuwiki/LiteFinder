@@ -20,8 +20,8 @@ app.get("/health", (req, res) => {
 
 app.get("/", (req, res) => {
   res.json({
-    name: "olela",
-    version: "2.0.0",
+    name: "LiteFinder",
+    version: "x1.2",
     config: {
       seed: CONFIG.seed,
       mcVersion: CONFIG.mcVersion,
@@ -43,27 +43,61 @@ app.get("/", (req, res) => {
   });
 });
 
+// ANSI 颜色代码
+const colors = {
+  reset: "\x1b[0m",
+  bright: "\x1b[1m",
+  cyan: "\x1b[36m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  magenta: "\x1b[35m",
+  gray: "\x1b[90m",
+};
+
+function printBanner() {
+  const banner = `
+${colors.cyan}${colors.bright}
+ ██╗     ██╗████████╗███████╗███████╗██╗███╗   ██╗██████╗ ███████╗██████╗ 
+ ██║     ██║╚══██╔══╝██╔════╝██╔════╝██║████╗  ██║██╔══██╗██╔════╝██╔══██╗
+ ██║     ██║   ██║   █████╗  █████╗  ██║██╔██╗ ██║██║  ██║█████╗  ██████╔╝
+ ██║     ██║   ██║   ██╔══╝  ██╔══╝  ██║██║╚██╗██║██║  ██║██╔══╝  ██╔══██╗
+ ███████╗██║   ██║   ███████╗██║     ██║██║ ╚████║██████╔╝███████╗██║  ██║
+ ╚══════╝╚═╝   ╚═╝   ╚══════╝╚═╝     ╚═╝╚═╝  ╚═══╝╚═════╝ ╚══════╝╚═╝  ╚═╝
+${colors.reset}
+${colors.gray}  Version: ${colors.green}x1.2${colors.gray}  |  Author: ${colors.green}ONEGAME${colors.gray}  |  Based on: ${colors.green}KeleBot Finder Gen2${colors.reset}
+${colors.gray}  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}
+`;
+  console.log(banner);
+}
+
 async function start() {
-  console.log("olela 正在启动...");
-  console.log(`  种子: ${CONFIG.seed}`);
-  console.log(`  版本: ${CONFIG.mcVersion}`);
-  console.log(`  数据包: ${CONFIG.additionalDatapacks.join(", ") || "仅原版"}`);
+  printBanner();
+  
+  console.log(`${colors.blue}[配置]${colors.reset} 种子: ${colors.yellow}${CONFIG.seed}${colors.reset}`);
+  console.log(`${colors.blue}[配置]${colors.reset} 版本: ${colors.yellow}${CONFIG.mcVersion}${colors.reset}`);
+  console.log(`${colors.blue}[配置]${colors.reset} 数据包: ${colors.yellow}${CONFIG.additionalDatapacks.length}${colors.reset} 个`);
+  console.log();
 
   await new Promise<void>((resolve) => {
     app.listen(CONFIG.port, () => {
-      console.log(`服务器运行在 http://localhost:${CONFIG.port}`);
+      console.log(`${colors.green}✓${colors.reset} 服务器启动成功: ${colors.cyan}http://localhost:${CONFIG.port}${colors.reset}`);
       resolve();
     });
   });
 
   await new Promise((resolve) => setTimeout(resolve, 500));
 
-  console.log("正在加载数据包并初始化三个维度...");
+  console.log(`${colors.magenta}[初始化]${colors.reset} 正在加载数据包并初始化三个维度...`);
   try {
     await initializeCalculator();
-    console.log("初始化完成，服务就绪。");
+    console.log(`${colors.green}✓${colors.reset} 初始化完成，服务就绪`);
+    console.log();
+    console.log(`${colors.gray}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+    console.log(`${colors.bright}  访问 ${colors.cyan}http://localhost:${CONFIG.port}${colors.reset}${colors.bright} 查看 API 文档${colors.reset}`);
+    console.log(`${colors.gray}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
   } catch (error) {
-    console.error("初始化失败:", error);
+    console.error(`${colors.red}✗${colors.reset} 初始化失败:`, error);
     process.exit(1);
   }
 }

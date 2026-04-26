@@ -182,8 +182,7 @@ export class DatapackLoader {
       noises[id.toString()] = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_NOISE, id);
     }
 
-    return { biomeSourceJson, noiseSettingsJson, noiseSettingsId, densityFunctions, noises, levelHeight, structureSetsSnapshot, structuresSnapshot };
-  }
+    return { biomeSourceJson, noiseSettingsJson, noiseSettingsId, densityFunctions, noises, levelHeight, structureSetsSnapshot, structuresSnapshot };  }
 
   public async loadDimensionAndSave(
     dimensionId: Identifier,
@@ -303,6 +302,76 @@ export class DatapackLoader {
       }
     }
 
+    // 补充 has_structure 系列标签（Minecraft 服务端动态生成，deepslate 不自动处理）
+    // 这些标签被 DNT 等数据包的结构 biomes 字段引用，必须手动注册否则结构验证永远失败
+    const hasStructureTags: Record<string, string[]> = {
+      "minecraft:has_structure/nether_fortress": [
+        "minecraft:nether_wastes", "minecraft:soul_sand_valley",
+        "minecraft:crimson_forest", "minecraft:warped_forest", "minecraft:basalt_deltas",
+      ],
+      "minecraft:has_structure/bastion_remnant": [
+        "minecraft:nether_wastes", "minecraft:soul_sand_valley",
+        "minecraft:crimson_forest", "minecraft:warped_forest",
+      ],
+      "minecraft:has_structure/end_city": [
+        "minecraft:end_midlands", "minecraft:end_highlands",
+      ],
+      "minecraft:has_structure/stronghold": [
+        "minecraft:plains", "minecraft:desert", "minecraft:forest",
+        "minecraft:taiga", "minecraft:jungle", "minecraft:savanna",
+        "minecraft:ocean", "minecraft:snowy_plains",
+      ],
+      "minecraft:has_structure/village_plains":   ["minecraft:plains", "minecraft:meadow"],
+      "minecraft:has_structure/village_desert":   ["minecraft:desert"],
+      "minecraft:has_structure/village_savanna":  ["minecraft:savanna"],
+      "minecraft:has_structure/village_snowy":    ["minecraft:snowy_plains"],
+      "minecraft:has_structure/village_taiga":    ["minecraft:taiga"],
+      "minecraft:has_structure/pillager_outpost": [
+        "minecraft:plains", "minecraft:desert", "minecraft:savanna",
+        "minecraft:taiga", "minecraft:snowy_plains", "minecraft:meadow",
+        "minecraft:frozen_peaks", "minecraft:jagged_peaks", "minecraft:stony_peaks",
+        "minecraft:snowy_slopes",
+      ],
+      "minecraft:has_structure/ancient_city":     ["minecraft:deep_dark"],
+      "minecraft:has_structure/trial_chambers":   [
+        "minecraft:plains", "minecraft:desert", "minecraft:forest",
+        "minecraft:taiga", "minecraft:savanna", "minecraft:jungle",
+      ],
+      "minecraft:has_structure/mansion":          ["minecraft:dark_forest"],
+      "minecraft:has_structure/swamp_hut":        ["minecraft:swamp"],
+      "minecraft:has_structure/igloo":            ["minecraft:snowy_taiga", "minecraft:snowy_plains"],
+      "minecraft:has_structure/desert_pyramid":   ["minecraft:desert"],
+      "minecraft:has_structure/jungle_temple":    ["minecraft:jungle", "minecraft:bamboo_jungle"],
+      "minecraft:has_structure/ocean_monument":   [
+        "minecraft:ocean", "minecraft:deep_ocean",
+        "minecraft:lukewarm_ocean", "minecraft:deep_lukewarm_ocean",
+      ],
+      "minecraft:has_structure/shipwreck":        [
+        "minecraft:ocean", "minecraft:deep_ocean", "minecraft:frozen_ocean",
+        "minecraft:cold_ocean", "minecraft:lukewarm_ocean", "minecraft:warm_ocean",
+        "minecraft:beach", "minecraft:snowy_beach",
+      ],
+      "minecraft:has_structure/buried_treasure":  ["minecraft:beach", "minecraft:snowy_beach"],
+      "minecraft:has_structure/ocean_ruin":       [
+        "minecraft:ocean", "minecraft:deep_ocean", "minecraft:cold_ocean",
+        "minecraft:frozen_ocean", "minecraft:lukewarm_ocean", "minecraft:warm_ocean",
+      ],
+    };
+    for (const [tagId, biomeIds] of Object.entries(hasStructureTags)) {
+      try {
+        const id = Identifier.parse(tagId);
+        const values = biomeIds
+          .filter(b => WorldgenRegistries.BIOME.get(Identifier.parse(b)) !== undefined)
+          .map(b => ({ id: b, required: false }));
+        if (values.length > 0) {
+          biomeTagRegistry.register(id, HolderSet.fromJson(WorldgenRegistries.BIOME, { values }, id));
+        }
+      } catch (e) {
+        // 静默忽略
+      }
+    }
+    console.log(`Registered has_structure biome tags`);
+
     // 注册模板池（需要注册内容，Jigsaw结构验证时依赖模板池查找）
     StructureTemplatePool.REGISTRY.clear();
     for (const id of await this.compositeDatapack.getIds(ResourceLocation.WORLDGEN_TEMPLATE_POOL)) {
@@ -316,27 +385,32 @@ export class DatapackLoader {
     }
 
     // 注册结构模板（NBT 文件）
+    // 仅查找结构位置时不需要 NBT 模板内容，跳过以节省内存
     Structure.REGISTRY.clear();
-    const structureLocation = this.getStructureResourceLocation();
-    for (const id of await this.compositeDatapack.getIds(structureLocation)) {
-      try {
-        const data = await this.compositeDatapack.get(structureLocation, id);
-        const nbtFile = NbtFile.read(new Uint8Array(data as ArrayBuffer));
-        const structure = Structure.fromNbt(nbtFile.root);
-        Structure.REGISTRY.register(id, () => structure);
-      } catch (e) {
-        // 静默忽略
-      }
-    }
-    console.log(`Registered ${Structure.REGISTRY.keys().length} structure templates`);
+    // const structureLocation = this.getStructureResourceLocation();
+    // for (const id of await this.compositeDatapack.getIds(structureLocation)) {
+    //   try {
+    //     const data = await this.compositeDatapack.get(structureLocation, id);
+    //     const nbtFile = NbtFile.read(new Uint8Array(data as ArrayBuffer));
+    //     const structure = Structure.fromNbt(nbtFile.root);
+    //     Structure.REGISTRY.register(id, () => structure);
+    //   } catch (e) {
+    //     // 静默忽略
+    //   }
+    // }
+    console.log(`Skipped structure template loading (not needed for location finding)`);
 
     // 注册结构（跳过 NBT 模板，节省内存）
+    // 对含有 start_jigsaw_name 的 jigsaw 结构，移除该字段以避免依赖 NBT 模板数据
     WorldgenStructure.REGISTRY.clear();
     for (const id of await this.compositeDatapack.getIds(ResourceLocation.WORLDGEN_STRUCTURE)) {
       try {
         const data = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_STRUCTURE, id);
         const root = Json.readObject(data) ?? {};
         delete root.dimension_padding;
+        // start_jigsaw_name 需要读取 NBT 中的 jigsaw 块名称，跳过 NBT 加载后无法使用
+        // 删除后 deepslate 会使用模板池的默认起始点，不影响坐标计算
+        delete root.start_jigsaw_name;
         WorldgenStructure.REGISTRY.register(id, WorldgenStructure.fromJson(root));
       } catch (e) {
         console.warn(`Failed to register structure: ${id}: ${e}`);
