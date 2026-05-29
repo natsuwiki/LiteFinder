@@ -1,1 +1,0 @@
-scoreboard objectives add dnt_health health

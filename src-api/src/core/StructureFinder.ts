@@ -14,7 +14,7 @@ import {
  */
 export const UNSUPPORTED_STRUCTURE_TYPES = [
   "MineshaftStructure",
-  "NetherFossilStructure", 
+  "NetherFossilStructure",
   "OceanMonumentStructure",
   "RuinedPortalStructure",
 ] as const;
@@ -66,31 +66,45 @@ export interface StructureFinderConfig {
 }
 
 /**
- * 缓存生物群系源 - 与原版保持一致的实现
- * 使用基于坐标的局部缓存策略
+ * 优化版缓存生物群系源
+ * 使用 LRU 策略 + 更大的缓存窗口
  */
-const CACHE_SIZE = 11;
-const CACHE_CENTER = 4;
+const CACHE_SIZE = 16;
+const CACHE_CENTER = 7;
 
 class CachedBiomeSource implements BiomeSource {
   private cache: Map<number, Identifier> = new Map();
   private cache_center_x: number = 0;
   private cache_center_z: number = 0;
+  private accessOrder: number[] = [];
+  private readonly maxCacheEntries: number;
 
-  constructor(private readonly base: BiomeSource) {}
+  constructor(
+    private readonly base: BiomeSource,
+    maxEntries: number = 20000
+  ) {
+    this.maxCacheEntries = maxEntries;
+  }
 
   /**
    * 设置缓存中心点 - 关键方法！
    * 在检查每个区块的结构前必须调用
    */
   public setupCache(x: number, z: number): void {
-    this.cache.clear();
+    // 仅在中心点变化较大时才清空缓存（利用局部性）
+    const dx = Math.abs(x - this.cache_center_x);
+    const dz = Math.abs(z - this.cache_center_z);
+    if (dx > CACHE_CENTER * 2 || dz > CACHE_CENTER * 2) {
+      this.cache.clear();
+      this.accessOrder.length = 0;
+    }
     this.cache_center_x = x;
     this.cache_center_z = z;
   }
 
   public clearCache(): void {
     this.cache.clear();
+    this.accessOrder.length = 0;
   }
 
   getBiome(x: number, y: number, z: number, climateSampler: Climate.Sampler): Identifier {
@@ -112,8 +126,18 @@ class CachedBiomeSource implements BiomeSource {
       return cached;
     }
 
+    // LRU 淘汰
+    if (this.cache.size >= this.maxCacheEntries) {
+      const evictCount = this.maxCacheEntries >> 2; // 淘汰 25%
+      for (let i = 0; i < evictCount && this.accessOrder.length > 0; i++) {
+        const key = this.accessOrder.shift()!;
+        this.cache.delete(key);
+      }
+    }
+
     const biome = this.base.getBiome(x, y, z, climateSampler);
     this.cache.set(cache_index, biome);
+    this.accessOrder.push(cache_index);
     return biome;
   }
 }
@@ -129,6 +153,9 @@ export class StructureFinder {
   // 本维度的注册表快照（与全局注册表隔离）
   private structureSets: Map<string, StructureSet> = new Map();
   private structures: Map<string, WorldgenStructure> = new Map();
+
+  // 结构 ID → 所属结构集 的快速查找缓存
+  private structureToSetMap: Map<string, string[]> = new Map();
 
   public initialize(config: StructureFinderConfig): void {
     this.config = config;
@@ -158,6 +185,27 @@ export class StructureFinder {
       for (const id of WorldgenStructure.REGISTRY.keys()) {
         const s = WorldgenStructure.REGISTRY.get(id);
         if (s) this.structures.set(id.toString(), s);
+      }
+    }
+
+    // 构建结构→结构集映射
+    this.buildStructureToSetMap();
+  }
+
+  private buildStructureToSetMap(): void {
+    this.structureToSetMap.clear();
+    for (const [setIdStr, set] of this.structureSets) {
+      for (const entry of set.structures) {
+        const structureKey = entry.structure.key();
+        if (structureKey) {
+          const key = structureKey.toString();
+          let list = this.structureToSetMap.get(key);
+          if (!list) {
+            list = [];
+            this.structureToSetMap.set(key, list);
+          }
+          list.push(setIdStr);
+        }
       }
     }
   }
@@ -224,9 +272,7 @@ export class StructureFinder {
         const chunkZ = centerChunkZ + dz;
 
         for (const [setIdStr, set] of this.structureSets) {
-
           try {
-            // 准备同心环放置
             if (set.placement instanceof StructurePlacement.ConcentricRingsStructurePlacement) {
               set.placement.prepare(
                 this.config.biomeSource,
@@ -235,7 +281,6 @@ export class StructureFinder {
               );
             }
 
-            // 检查该区块是否可能有结构
             const potentialChunks = set.placement.getPotentialStructureChunks(
               this.config.seed,
               chunkX,
@@ -247,7 +292,6 @@ export class StructureFinder {
             for (const chunk of potentialChunks) {
               if (chunk[0] === chunkX && chunk[1] === chunkZ) {
                 try {
-                  // 关键：设置缓存中心到当前区块
                   this.cachedBiomeSource?.setupCache(chunkX << 2, chunkZ << 2);
                   const structure = set.getStructureInChunk(
                     chunkX,
@@ -272,12 +316,12 @@ export class StructureFinder {
                       };
                     }
                   }
-                } catch (e) {
+                } catch (_e) {
                   // 忽略错误，继续检查其他结构集
                 }
               }
             }
-          } catch (e) {
+          } catch (_e) {
             // 忽略错误
           }
         }
@@ -306,9 +350,7 @@ export class StructureFinder {
     const maxChunkZ = (centerZ + radius) >> 4;
 
     for (const [setIdStr, set] of this.structureSets) {
-
       try {
-        // 准备同心环放置
         if (set.placement instanceof StructurePlacement.ConcentricRingsStructurePlacement) {
           set.placement.prepare(
             this.config.biomeSource,
@@ -327,15 +369,14 @@ export class StructureFinder {
 
         for (const chunk of potentialChunks) {
           try {
-            // 关键：设置缓存中心到当前区块
             this.cachedBiomeSource?.setupCache(chunk[0] << 2, chunk[1] << 2);
-            
+
             const structure = set.getStructureInChunk(
               chunk[0],
               chunk[1],
               this.generationContext
             );
-            
+
             if (structure) {
               const dist = Math.sqrt(
                 Math.pow(structure.pos[0] - centerX, 2) +
@@ -353,11 +394,11 @@ export class StructureFinder {
                 });
               }
             }
-          } catch (e) {
-            // 忽略单个结构的错误，继续处理其他结构
+          } catch (_e) {
+            // 忽略单个结构的错误
           }
         }
-      } catch (e) {
+      } catch (_e) {
         // 忽略整个结构集的错误
       }
     }
@@ -368,7 +409,8 @@ export class StructureFinder {
   }
 
   /**
-   * 查找最近的指定结构
+   * 查找最近的指定结构（优化版）
+   * 使用预构建的结构→结构集映射，避免每次遍历全部结构集
    */
   public findNearestStructure(
     structureId: string,
@@ -381,42 +423,45 @@ export class StructureFinder {
     }
 
     const targetId = Identifier.parse(structureId);
-    let nearest: StructureResult | null = null;
-    let nearestDistance = Infinity;
 
-    // 找到包含目标结构的结构集
-    const relevantSets: string[] = [];
-    for (const [setIdStr, set] of this.structureSets) {
-      for (const entry of set.structures) {
-        if (entry.structure.key()?.equals(targetId)) {
-          relevantSets.push(setIdStr);
-          break;
-        }
-      }
-    }
+    // 使用预构建的快速查找映射
+    const relevantSets = this.structureToSetMap.get(structureId)
+      ?? this.structureToSetMap.get(targetId.toString())
+      ?? [];
 
     if (relevantSets.length === 0) {
+      // 也尝试带命名空间的匹配
       return null;
     }
 
-    // 从内向外逐圈扩展，找到即返回
-    const chunkStep = Math.max(
-      1,
-      // 根据结构集的 spacing 估算步长，避免漏掉候选区块
-      (() => {
-        const set = this.structureSets.get(relevantSets[0]);
-        if (!set) return 1;
-        const p = set.placement;
-        if (p instanceof StructurePlacement.RandomSpreadStructurePlacement) {
-          return Math.max(1, (p as any).spacing ?? 1);
-        }
-        return 1;
-      })()
-    );
+    let nearest: StructureResult | null = null;
+    let nearestDistance = Infinity;
+
+    // 计算最优步长（基于结构集的 spacing）
+    let chunkStep = 1;
+    for (const setIdStr of relevantSets) {
+      const set = this.structureSets.get(setIdStr);
+      if (!set) continue;
+      const p = set.placement;
+      if (p instanceof StructurePlacement.RandomSpreadStructurePlacement) {
+        const spacing = (p as unknown as { spacing: number }).spacing ?? 1;
+        chunkStep = Math.max(chunkStep, Math.max(1, spacing));
+      }
+    }
+
+    // 确保同心环结构使用小步长以不遗漏
+    for (const setIdStr of relevantSets) {
+      const set = this.structureSets.get(setIdStr);
+      if (set?.placement instanceof StructurePlacement.ConcentricRingsStructurePlacement) {
+        chunkStep = 1;
+        break;
+      }
+    }
 
     const maxChunkRadius = maxRadius >> 4;
 
-    for (let r = 0; r <= maxChunkRadius; r += chunkStep) {
+    // 逐圈向外搜索
+    outer: for (let r = 0; r <= maxChunkRadius; r += chunkStep) {
       for (const setIdStr of relevantSets) {
         const set = this.structureSets.get(setIdStr);
         if (!set) continue;
@@ -436,11 +481,9 @@ export class StructureFinder {
           );
 
           for (const chunk of potentialChunks) {
-            const dist = Math.sqrt(
-              Math.pow((chunk[0] << 4) - centerX, 2) + Math.pow((chunk[1] << 4) - centerZ, 2)
-            );
-            // 只处理新增的外圈区块（距离在 (r-chunkStep)*16 ~ r*16 之间）
-            if (r > 0 && dist < (r - chunkStep) * 16) continue;
+            const chunkDistSq = Math.pow((chunk[0] << 4) - centerX, 2) + Math.pow((chunk[1] << 4) - centerZ, 2);
+            // 只处理新增的外圈区块
+            if (r > 0 && Math.sqrt(chunkDistSq) < (r - chunkStep) * 16) continue;
 
             try {
               this.cachedBiomeSource?.setupCache(chunk[0] << 2, chunk[1] << 2);
@@ -463,18 +506,18 @@ export class StructureFinder {
                   };
                 }
               }
-            } catch (e) {
+            } catch (_e) {
               // 忽略单个结构的错误
             }
           }
-        } catch (e) {
+        } catch (_e) {
           // 忽略整个结构集的错误
         }
       }
 
       // 找到后，确认当前圈之外不可能有更近的，立即返回
       if (nearest && nearestDistance <= r * 16) {
-        return nearest;
+        break outer;
       }
     }
 

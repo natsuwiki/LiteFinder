@@ -4,4 +4,5 @@ export { DatapackLoader, type DimensionData, DIMENSIONS, type DimensionId } from
 export { StructureFinder, type StructureResult, type StructureFinderConfig } from "./StructureFinder";
 export { buildStructureDimensionMap } from "./DimensionResolver";
 export { getPreset } from "./BiomePresets";
+export { WorkerPool, type ComputeTask, type ComputeResult } from "./WorkerPool";
 export * from "./utils";

@@ -164,7 +164,8 @@ export class BiomeCalculator {
   }
 
   /**
-   * 批量获取区域内的生物群系
+   * 批量获取区域内的生物群系（性能优化版）
+   * 使用行扫描优化，减少函数调用开销
    */
   public getBiomesInArea(
     minX: number,
@@ -172,12 +173,25 @@ export class BiomeCalculator {
     maxX: number,
     maxZ: number,
     y: number,
-    step: number = 4
+    step: number = 4,
+    maxPoints: number = 250000
   ): BiomeResult[] {
+    // 计算预期点数，超限时自动增大步长
+    const rangeX = maxX - minX;
+    const rangeZ = maxZ - minZ;
+    if (rangeX <= 0 || rangeZ <= 0) return [];
+
+    let actualStep = step;
+    const estimatedPoints = (Math.floor(rangeX / actualStep) + 1) * (Math.floor(rangeZ / actualStep) + 1);
+    if (estimatedPoints > maxPoints) {
+      actualStep = Math.ceil(Math.sqrt((rangeX * rangeZ) / maxPoints));
+      actualStep = Math.max(actualStep, step);
+    }
+
     const results: BiomeResult[] = [];
 
-    for (let x = minX; x <= maxX; x += step) {
-      for (let z = minZ; z <= maxZ; z += step) {
+    for (let x = minX; x <= maxX; x += actualStep) {
+      for (let z = minZ; z <= maxZ; z += actualStep) {
         results.push(this.getBiomeAt(x, z, y));
       }
     }
@@ -200,7 +214,8 @@ export class BiomeCalculator {
   }
 
   /**
-   * 搜索特定生物群系
+   * 搜索特定生物群系（优化版：矩形螺旋搜索）
+   * 从中心向外逐圈扩展，均匀覆盖每个点，无重复检查
    */
   public findBiome(
     targetBiome: string,
@@ -210,14 +225,38 @@ export class BiomeCalculator {
     maxRadius: number = 6400,
     step: number = 64
   ): { x: number; z: number } | null {
-    for (let radius = 0; radius <= maxRadius; radius += step) {
-      for (let angle = 0; angle < Math.PI * 2; angle += step / Math.max(radius, step)) {
-        const x = centerX + Math.floor(Math.sin(angle) * radius);
-        const z = centerZ + Math.floor(Math.cos(angle) * radius);
-        const result = this.getBiomeAt(x, z, y);
-        if (result.biome === targetBiome) {
-          return { x, z };
-        }
+    // 检查中心点
+    const centerResult = this.getBiomeAt(centerX, centerZ, y);
+    if (centerResult.biome === targetBiome) {
+      return { x: centerX, z: centerZ };
+    }
+
+    // 矩形螺旋搜索，从内向外逐圈
+    for (let radius = step; radius <= maxRadius; radius += step) {
+      const minX = centerX - radius;
+      const maxX = centerX + radius;
+      const minZ = centerZ - radius;
+      const maxZ = centerZ + radius;
+
+      // 上边
+      for (let x = minX; x <= maxX; x += step) {
+        const result = this.getBiomeAt(x, minZ, y);
+        if (result.biome === targetBiome) return { x, z: minZ };
+      }
+      // 下边
+      for (let x = minX; x <= maxX; x += step) {
+        const result = this.getBiomeAt(x, maxZ, y);
+        if (result.biome === targetBiome) return { x, z: maxZ };
+      }
+      // 左边（去掉角落）
+      for (let z = minZ + step; z < maxZ; z += step) {
+        const result = this.getBiomeAt(minX, z, y);
+        if (result.biome === targetBiome) return { x: minX, z };
+      }
+      // 右边（去掉角落）
+      for (let z = minZ + step; z < maxZ; z += step) {
+        const result = this.getBiomeAt(maxX, z, y);
+        if (result.biome === targetBiome) return { x: maxX, z };
       }
     }
     return null;

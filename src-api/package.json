@@ -1,11 +1,12 @@
 {
-  "name": "kelebot-gen2-finder",
+  "name": "litefinder",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "start:lowmem": "node --max-old-space-size=384 --expose-gc node_modules/tsx/dist/cli.mjs src/server.ts"
   },
   "dependencies": {
     "deepslate": "^0.23.4",

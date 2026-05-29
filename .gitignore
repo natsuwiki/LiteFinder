@@ -1,1 +1,9 @@
 node_modules
+dnt_temp/
+locales/
+public/images/
+public/CNAME
+public/dnt.zip
+public/tectonic.zip
+dist/
+*.log

@@ -15,8 +15,6 @@ import {
   StructureSet,
   WorldgenStructure,
   StructureTemplatePool,
-  Structure,
-  NbtFile,
 } from "deepslate";
 import { getPreset } from "./BiomePresets";
 
@@ -44,6 +42,11 @@ export class DatapackLoader {
   private compositeDatapack!: AnonymousDatapack;
   public dimensionData: DimensionData | null = null;
 
+  // 性能优化：缓存注册过的资源，避免重复注册
+  private resourcesRegistered = false;
+  private cachedDensityFunctions: Record<string, unknown> | null = null;
+  private cachedNoises: Record<string, unknown> | null = null;
+
   constructor(private mcVersion: string = "1_21_4") {}
 
   public async loadVanillaDatapack(url: string): Promise<void> {
@@ -67,6 +70,10 @@ export class DatapackLoader {
     const datapack = Datapack.fromZipUrl(url, this.getDatapackFormat());
     this.datapacks.push(datapack);
     this.updateComposite();
+    // 添加新数据包后需要重新注册
+    this.resourcesRegistered = false;
+    this.cachedDensityFunctions = null;
+    this.cachedNoises = null;
   }
 
   private updateComposite(): void {
@@ -96,23 +103,22 @@ export class DatapackLoader {
       : ResourceLocation.LEGACY_STRUCTURE;
   }
 
+  /**
+   * 加载维度数据（优化版：资源只注册一次）
+   */
   public async loadDimension(
     dimensionId: Identifier,
     worldPreset: Identifier = Identifier.create("normal")
   ): Promise<DimensionData> {
-    await this.registerResources();
+    // 性能优化：只注册一次资源，后续维度复用
+    if (!this.resourcesRegistered) {
+      await this.registerResources();
+      this.resourcesRegistered = true;
+    }
 
     // 注册完成后立即拍快照，防止后续维度初始化覆盖全局注册表
-    const structureSetsSnapshot = new Map<string, StructureSet>();
-    for (const id of StructureSet.REGISTRY.keys()) {
-      const set = StructureSet.REGISTRY.get(id);
-      if (set) structureSetsSnapshot.set(id.toString(), set);
-    }
-    const structuresSnapshot = new Map<string, WorldgenStructure>();
-    for (const id of WorldgenStructure.REGISTRY.keys()) {
-      const s = WorldgenStructure.REGISTRY.get(id);
-      if (s) structuresSnapshot.set(id.toString(), s);
-    }
+    const structureSetsSnapshot = this.takeStructureSetsSnapshot();
+    const structuresSnapshot = this.takeStructuresSnapshot();
 
     let dimensionJson: any;
     if (await this.compositeDatapack.has(ResourceLocation.DIMENSION, dimensionId)) {
@@ -170,19 +176,65 @@ export class DatapackLoader {
       biomeSourceJson.biomes = getPreset(preset, this.mcVersion);
     }
 
-    const densityFunctions: Record<string, unknown> = {};
-    for (const id of await this.compositeDatapack.getIds(ResourceLocation.WORLDGEN_DENSITY_FUNCTION)) {
-      densityFunctions[id.toString()] = await this.compositeDatapack.get(
-        ResourceLocation.WORLDGEN_DENSITY_FUNCTION, id
-      );
+    // 性能优化：缓存密度函数和噪声数据，避免每个维度重复从 zip 解析
+    let densityFunctions: Record<string, unknown>;
+    let noises: Record<string, unknown>;
+
+    if (this.cachedDensityFunctions && this.cachedNoises) {
+      densityFunctions = this.cachedDensityFunctions;
+      noises = this.cachedNoises;
+    } else {
+      densityFunctions = {};
+      for (const id of await this.compositeDatapack.getIds(ResourceLocation.WORLDGEN_DENSITY_FUNCTION)) {
+        densityFunctions[id.toString()] = await this.compositeDatapack.get(
+          ResourceLocation.WORLDGEN_DENSITY_FUNCTION, id
+        );
+      }
+
+      noises = {};
+      for (const id of await this.compositeDatapack.getIds(ResourceLocation.WORLDGEN_NOISE)) {
+        noises[id.toString()] = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_NOISE, id);
+      }
+
+      this.cachedDensityFunctions = densityFunctions;
+      this.cachedNoises = noises;
     }
 
-    const noises: Record<string, unknown> = {};
-    for (const id of await this.compositeDatapack.getIds(ResourceLocation.WORLDGEN_NOISE)) {
-      noises[id.toString()] = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_NOISE, id);
-    }
+    return {
+      biomeSourceJson,
+      noiseSettingsJson,
+      noiseSettingsId,
+      densityFunctions,
+      noises,
+      levelHeight,
+      structureSetsSnapshot,
+      structuresSnapshot,
+    };
+  }
 
-    return { biomeSourceJson, noiseSettingsJson, noiseSettingsId, densityFunctions, noises, levelHeight, structureSetsSnapshot, structuresSnapshot };  }
+  /**
+   * 拍摄结构集快照
+   */
+  private takeStructureSetsSnapshot(): Map<string, StructureSet> {
+    const snapshot = new Map<string, StructureSet>();
+    for (const id of StructureSet.REGISTRY.keys()) {
+      const set = StructureSet.REGISTRY.get(id);
+      if (set) snapshot.set(id.toString(), set);
+    }
+    return snapshot;
+  }
+
+  /**
+   * 拍摄结构快照
+   */
+  private takeStructuresSnapshot(): Map<string, WorldgenStructure> {
+    const snapshot = new Map<string, WorldgenStructure>();
+    for (const id of WorldgenStructure.REGISTRY.keys()) {
+      const s = WorldgenStructure.REGISTRY.get(id);
+      if (s) snapshot.set(id.toString(), s);
+    }
+    return snapshot;
+  }
 
   public async loadDimensionAndSave(
     dimensionId: Identifier,
@@ -224,18 +276,19 @@ export class DatapackLoader {
       }
       // fixed 格式
       if (typeof biomeSource.biome === "string") biomeIds.push(biomeSource.biome);
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
     return biomeIds;
   }
+
   public async getRawStructureJsons(): Promise<Map<string, any>> {
     const result = new Map<string, any>();
     for (const id of await this.compositeDatapack.getIds(ResourceLocation.WORLDGEN_STRUCTURE)) {
       try {
         const data = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_STRUCTURE, id);
         result.set(id.toString(), data);
-      } catch (e) {
+      } catch (_e) {
         // ignore
       }
     }
@@ -251,14 +304,20 @@ export class DatapackLoader {
       try {
         const data = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_BIOME_TAG, id);
         result.set(id.toString(), data);
-      } catch (e) {
+      } catch (_e) {
         // ignore
       }
     }
     return result;
   }
 
+  /**
+   * 注册所有世界生成资源到全局注册表
+   * 只在首次调用时执行完整注册
+   */
   private async registerResources(): Promise<void> {
+    const startTime = Date.now();
+
     // 注册密度函数
     WorldgenRegistries.DENSITY_FUNCTION.clear();
     for (const id of await this.compositeDatapack.getIds(ResourceLocation.WORLDGEN_DENSITY_FUNCTION)) {
@@ -268,8 +327,8 @@ export class DatapackLoader {
           Holder.parser(WorldgenRegistries.DENSITY_FUNCTION, DensityFunction.fromJson)(data)
         );
         WorldgenRegistries.DENSITY_FUNCTION.register(id, df);
-      } catch (e) {
-        console.warn(`Failed to register density function: ${id}`);
+      } catch (_e) {
+        // 静默忽略
       }
     }
 
@@ -279,8 +338,8 @@ export class DatapackLoader {
       try {
         const data = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_NOISE, id);
         WorldgenRegistries.NOISE.register(id, NoiseParameters.fromJson(data));
-      } catch (e) {
-        console.warn(`Failed to register noise: ${id}`);
+      } catch (_e) {
+        // 静默忽略
       }
     }
 
@@ -297,13 +356,12 @@ export class DatapackLoader {
       try {
         const data = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_BIOME_TAG, id);
         biomeTagRegistry.register(id, HolderSet.fromJson(WorldgenRegistries.BIOME, data, id));
-      } catch (e) {
-        console.warn(`Failed to register biome tag: ${id}`);
+      } catch (_e) {
+        // 静默忽略
       }
     }
 
     // 补充 has_structure 系列标签（Minecraft 服务端动态生成，deepslate 不自动处理）
-    // 这些标签被 DNT 等数据包的结构 biomes 字段引用，必须手动注册否则结构验证永远失败
     const hasStructureTags: Record<string, string[]> = {
       "minecraft:has_structure/nether_fortress": [
         "minecraft:nether_wastes", "minecraft:soul_sand_valley",
@@ -366,54 +424,38 @@ export class DatapackLoader {
         if (values.length > 0) {
           biomeTagRegistry.register(id, HolderSet.fromJson(WorldgenRegistries.BIOME, { values }, id));
         }
-      } catch (e) {
+      } catch (_e) {
         // 静默忽略
       }
     }
     console.log(`Registered has_structure biome tags`);
 
-    // 注册模板池（需要注册内容，Jigsaw结构验证时依赖模板池查找）
+    // 注册模板池
     StructureTemplatePool.REGISTRY.clear();
     for (const id of await this.compositeDatapack.getIds(ResourceLocation.WORLDGEN_TEMPLATE_POOL)) {
       try {
         const data = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_TEMPLATE_POOL, id);
         const pool = StructureTemplatePool.fromJson(data);
         StructureTemplatePool.REGISTRY.register(id, pool);
-      } catch (e) {
+      } catch (_e) {
         // 静默忽略
       }
     }
 
-    // 注册结构模板（NBT 文件）
-    // 仅查找结构位置时不需要 NBT 模板内容，跳过以节省内存
-    Structure.REGISTRY.clear();
-    // const structureLocation = this.getStructureResourceLocation();
-    // for (const id of await this.compositeDatapack.getIds(structureLocation)) {
-    //   try {
-    //     const data = await this.compositeDatapack.get(structureLocation, id);
-    //     const nbtFile = NbtFile.read(new Uint8Array(data as ArrayBuffer));
-    //     const structure = Structure.fromNbt(nbtFile.root);
-    //     Structure.REGISTRY.register(id, () => structure);
-    //   } catch (e) {
-    //     // 静默忽略
-    //   }
-    // }
+    // 注册结构模板（NBT 文件）- 跳过以节省内存，不加载 Structure.REGISTRY
     console.log(`Skipped structure template loading (not needed for location finding)`);
 
     // 注册结构（跳过 NBT 模板，节省内存）
-    // 对含有 start_jigsaw_name 的 jigsaw 结构，移除该字段以避免依赖 NBT 模板数据
     WorldgenStructure.REGISTRY.clear();
     for (const id of await this.compositeDatapack.getIds(ResourceLocation.WORLDGEN_STRUCTURE)) {
       try {
         const data = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_STRUCTURE, id);
         const root = Json.readObject(data) ?? {};
         delete root.dimension_padding;
-        // start_jigsaw_name 需要读取 NBT 中的 jigsaw 块名称，跳过 NBT 加载后无法使用
-        // 删除后 deepslate 会使用模板池的默认起始点，不影响坐标计算
         delete root.start_jigsaw_name;
         WorldgenStructure.REGISTRY.register(id, WorldgenStructure.fromJson(root));
-      } catch (e) {
-        console.warn(`Failed to register structure: ${id}: ${e}`);
+      } catch (_e) {
+        // 静默忽略
       }
     }
 
@@ -424,8 +466,8 @@ export class DatapackLoader {
       try {
         const data = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_STRUCTURE_TAG, id);
         structureTagRegistry.register(id, HolderSet.fromJson(WorldgenStructure.REGISTRY, data, id));
-      } catch (e) {
-        console.warn(`Failed to register structure tag: ${id}`);
+      } catch (_e) {
+        // 静默忽略
       }
     }
 
@@ -435,15 +477,36 @@ export class DatapackLoader {
       try {
         const data = await this.compositeDatapack.get(ResourceLocation.WORLDGEN_STRUCTURE_SET, id);
         StructureSet.REGISTRY.register(id, StructureSet.fromJson(data));
-      } catch (e) {
-        console.warn(`Failed to register structure set: ${id}`);
+      } catch (_e) {
+        // 静默忽略
       }
     }
 
-    console.log(`Registered ${WorldgenStructure.REGISTRY.keys().length} structures, ${StructureSet.REGISTRY.keys().length} structure sets`);
+    const elapsed = Date.now() - startTime;
+    console.log(`Registered ${WorldgenStructure.REGISTRY.keys().length} structures, ${StructureSet.REGISTRY.keys().length} structure sets (${elapsed}ms)`);
   }
 
   public getCompositeDatapack(): AnonymousDatapack {
     return this.compositeDatapack;
+  }
+
+  /**
+   * 释放中间数据，降低内存占用
+   * 在所有维度初始化完成后调用
+   */
+  public cleanup(): void {
+    this.datapacks = [];
+    this.dimensionData = null;
+    this.cachedDensityFunctions = null;
+    this.cachedNoises = null;
+    this.resourcesRegistered = false;
+    this.compositeDatapack = Datapack.compose(
+      new (class implements DatapackList {
+        async getDatapacks(): Promise<AnonymousDatapack[]> {
+          return [];
+        }
+      })()
+    );
+    console.log("[DatapackLoader] 已释放数据包中间数据");
   }
 }
