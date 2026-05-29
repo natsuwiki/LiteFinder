@@ -251,6 +251,23 @@ export class StructureFinder {
   }
 
   /**
+   * 临时抑制 deepslate 的 concentric rings 警告
+   */
+  private suppressConcentricRingsWarning<T>(fn: () => T): T {
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      const msg = args[0]?.toString() ?? "";
+      if (msg.includes("concentric rings") || msg.includes("trying to access")) return;
+      originalWarn.apply(console, args);
+    };
+    try {
+      return fn();
+    } finally {
+      console.warn = originalWarn;
+    }
+  }
+
+  /**
    * 查找指定坐标所在或附近的结构
    * 会检查周围 3x3 区块范围
    */
@@ -273,20 +290,24 @@ export class StructureFinder {
 
         for (const [setIdStr, set] of this.structureSets) {
           try {
-            if (set.placement instanceof StructurePlacement.ConcentricRingsStructurePlacement) {
-              set.placement.prepare(
-                this.config.biomeSource,
-                this.config.sampler,
-                this.config.seed
-              );
-            }
+            this.suppressConcentricRingsWarning(() => {
+              if (set.placement instanceof StructurePlacement.ConcentricRingsStructurePlacement) {
+                set.placement.prepare(
+                  this.config!.biomeSource,
+                  this.config!.sampler,
+                  this.config!.seed
+                );
+              }
+            });
 
-            const potentialChunks = set.placement.getPotentialStructureChunks(
-              this.config.seed,
-              chunkX,
-              chunkZ,
-              chunkX,
-              chunkZ
+            const potentialChunks = this.suppressConcentricRingsWarning(() =>
+              set.placement.getPotentialStructureChunks(
+                this.config!.seed,
+                chunkX,
+                chunkZ,
+                chunkX,
+                chunkZ
+              )
             );
 
             for (const chunk of potentialChunks) {
@@ -351,20 +372,24 @@ export class StructureFinder {
 
     for (const [setIdStr, set] of this.structureSets) {
       try {
-        if (set.placement instanceof StructurePlacement.ConcentricRingsStructurePlacement) {
-          set.placement.prepare(
-            this.config.biomeSource,
-            this.config.sampler,
-            this.config.seed
-          );
-        }
+        this.suppressConcentricRingsWarning(() => {
+          if (set.placement instanceof StructurePlacement.ConcentricRingsStructurePlacement) {
+            set.placement.prepare(
+              this.config!.biomeSource,
+              this.config!.sampler,
+              this.config!.seed
+            );
+          }
+        });
 
-        const potentialChunks = set.placement.getPotentialStructureChunks(
-          this.config.seed,
-          minChunkX,
-          minChunkZ,
-          maxChunkX,
-          maxChunkZ
+        const potentialChunks = this.suppressConcentricRingsWarning(() =>
+          set.placement.getPotentialStructureChunks(
+            this.config!.seed,
+            minChunkX,
+            minChunkZ,
+            maxChunkX,
+            maxChunkZ
+          )
         );
 
         for (const chunk of potentialChunks) {
@@ -467,17 +492,21 @@ export class StructureFinder {
         if (!set) continue;
 
         try {
-          if (set.placement instanceof StructurePlacement.ConcentricRingsStructurePlacement) {
-            set.placement.prepare(this.config.biomeSource, this.config.sampler, this.config.seed);
-          }
+          this.suppressConcentricRingsWarning(() => {
+            if (set.placement instanceof StructurePlacement.ConcentricRingsStructurePlacement) {
+              set.placement.prepare(this.config!.biomeSource, this.config!.sampler, this.config!.seed);
+            }
+          });
 
           const minCX = (centerX >> 4) - r;
           const minCZ = (centerZ >> 4) - r;
           const maxCX = (centerX >> 4) + r;
           const maxCZ = (centerZ >> 4) + r;
 
-          const potentialChunks = set.placement.getPotentialStructureChunks(
-            this.config.seed, minCX, minCZ, maxCX, maxCZ
+          const potentialChunks = this.suppressConcentricRingsWarning(() =>
+            set.placement.getPotentialStructureChunks(
+              this.config!.seed, minCX, minCZ, maxCX, maxCZ
+            )
           );
 
           for (const chunk of potentialChunks) {
