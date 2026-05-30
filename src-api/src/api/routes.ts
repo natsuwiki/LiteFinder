@@ -646,7 +646,7 @@ router.get("/locate/biome/chain", (req: Request, res: Response) => {
       if (!isInBounds(currentX, currentZ, bounds)) break;
 
       const effectiveRadius = clampRadiusToBounds(currentX, currentZ, maxRadius, bounds);
-      const result = findNearestBiome(calculator, biome, currentX, currentZ, y, effectiveRadius, step);
+      const result = findNearestBiome(calculator, biome, currentX, currentZ, y, effectiveRadius, step, chain.length > 0);
       if (!result) break;
 
       const distance = Math.round(Math.sqrt(Math.pow(result.x - currentX, 2) + Math.pow(result.z - currentZ, 2)));
@@ -703,10 +703,13 @@ function findNearestBiome(
   centerZ: number,
   y: number,
   maxRadius: number,
-  step: number
+  step: number,
+  skipCenter: boolean = false
 ): ReturnType<BiomeCalculator["getBiomeAt"]> | null {
-  const center = calculator.getBiomeAt(centerX, centerZ, y);
-  if (center.biome === targetBiome) return center;
+  if (!skipCenter) {
+    const center = calculator.getBiomeAt(centerX, centerZ, y);
+    if (center.biome === targetBiome) return center;
+  }
 
   // 两阶段搜索：粗粒度
   const coarseStep = step * 8;
