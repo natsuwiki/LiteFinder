@@ -575,7 +575,7 @@ router.get("/locate/structure/chain", (req: Request, res: Response) => {
         inBounds: true,
       });
 
-      foundPositions.push({ x: result.x, z: result.z });
+      foundPositions.push({ x: result.x, z: result.z, chunkX: result.chunkX, chunkZ: result.chunkZ });
       currentX = result.x;
       currentZ = result.z;
     }

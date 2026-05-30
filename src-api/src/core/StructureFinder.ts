@@ -442,7 +442,7 @@ export class StructureFinder {
     centerX: number,
     centerZ: number,
     maxRadius: number = 10000,
-    excludePositions?: Array<{ x: number; z: number }>
+    excludePositions?: Array<{ x: number; z: number; chunkX?: number; chunkZ?: number }>
   ): StructureResult | null {
     if (!this.config || !this.generationContext) {
       throw new Error("StructureFinder not initialized");
@@ -454,7 +454,15 @@ export class StructureFinder {
     const excludeSet = new Set<string>();
     if (excludePositions) {
       for (const pos of excludePositions) {
-        excludeSet.add(`${pos.x >> 4},${pos.z >> 4}`);
+        const cx = pos.chunkX ?? (pos.x >> 4);
+        const cz = pos.chunkZ ?? (pos.z >> 4);
+        excludeSet.add(`${cx},${cz}`);
+        // Also exclude surrounding chunks to handle edge cases
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            excludeSet.add(`${cx + dx},${cz + dz}`);
+          }
+        }
       }
     }
 
