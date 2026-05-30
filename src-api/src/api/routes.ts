@@ -500,11 +500,13 @@ router.get("/locate/structure", (req: Request, res: Response) => {
       return res.status(503).json({ error: `Dimension '${dim}' not initialized` });
     }
 
-    const result = finder.findNearestStructure(structure, x, z, maxRadius);
+    const bounds = parseBounds(req);
+    const effectiveRadius = clampRadiusToBounds(x, z, maxRadius, bounds);
+    const result = finder.findNearestStructure(structure, x, z, effectiveRadius);
     if (result) {
       res.json({ found: true, dimension: dim, autoDimension: autoDim, ...result });
     } else {
-      res.json({ found: false, dimension: dim, message: `Structure '${structure}' not found within ${maxRadius} blocks` });
+      res.json({ found: false, dimension: dim, bounds: bounds ?? undefined, message: `Structure '${structure}' not found within ${maxRadius} blocks` });
     }
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
@@ -553,12 +555,16 @@ router.get("/locate/structure/chain", (req: Request, res: Response) => {
     const foundPositions: Array<{ x: number; z: number }> = [];
 
     for (let i = 0; i < count; i++) {
-      if (!isInBounds(currentX, currentZ, bounds)) break;
+
 
       const effectiveRadius = clampRadiusToBounds(currentX, currentZ, maxRadius, bounds);
       const result = finder.findNearestStructure(structure, currentX, currentZ, effectiveRadius, foundPositions);
       if (!result) break;
-      if (!isInBounds(result.x, result.z, bounds)) break;
+      if (!isInBounds(result.x, result.z, bounds)) {
+        currentX = Math.max(bounds?.minX ?? -Infinity, Math.min(result.x, bounds?.maxX ?? Infinity));
+        currentZ = Math.max(bounds?.minZ ?? -Infinity, Math.min(result.z, bounds?.maxZ ?? Infinity));
+        continue;
+      }
 
       // 通过距离为0判断是否找到的是同一个结构（双重保护）
       if (result.distance === 0 && chain.length > 0) break;
@@ -643,7 +649,7 @@ router.get("/locate/biome/chain", (req: Request, res: Response) => {
     let totalDistance = 0;
 
     for (let i = 0; i < count; i++) {
-      if (!isInBounds(currentX, currentZ, bounds)) break;
+      
 
       const effectiveRadius = clampRadiusToBounds(currentX, currentZ, maxRadius, bounds);
       const result = findNearestBiome(calculator, biome, currentX, currentZ, y, effectiveRadius, step, chain.length > 0);
@@ -651,7 +657,11 @@ router.get("/locate/biome/chain", (req: Request, res: Response) => {
 
       const distance = Math.round(Math.sqrt(Math.pow(result.x - currentX, 2) + Math.pow(result.z - currentZ, 2)));
       if (distance === 0 && chain.length > 0) break;
-      if (!isInBounds(result.x, result.z, bounds)) break;
+            if (!isInBounds(result.x, result.z, bounds)) {
+        currentX = Math.max(bounds?.minX ?? -Infinity, Math.min(result.x, bounds?.maxX ?? Infinity));
+        currentZ = Math.max(bounds?.minZ ?? -Infinity, Math.min(result.z, bounds?.maxZ ?? Infinity));
+        continue;
+      }
 
       totalDistance += distance;
       chain.push({
