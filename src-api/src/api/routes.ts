@@ -503,8 +503,8 @@ router.get("/locate/structure", (req: Request, res: Response) => {
     const bounds = parseBounds(req);
     const effectiveRadius = clampRadiusToBounds(x, z, maxRadius, bounds);
     const result = finder.findNearestStructure(structure, x, z, effectiveRadius);
-    if (result) {
-      res.json({ found: true, dimension: dim, autoDimension: autoDim, ...result });
+    if (result && isInBounds(result.x, result.z, bounds)) {
+      res.json({ found: true, dimension: dim, autoDimension: autoDim, bounds: bounds ?? undefined, ...result });
     } else {
       res.json({ found: false, dimension: dim, bounds: bounds ?? undefined, message: `Structure '${structure}' not found within ${maxRadius} blocks` });
     }
