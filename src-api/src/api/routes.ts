@@ -550,16 +550,18 @@ router.get("/locate/structure/chain", (req: Request, res: Response) => {
     let currentX = startX;
     let currentZ = startZ;
     let totalDistance = 0;
+    const foundPositions: Array<{ x: number; z: number }> = [];
 
     for (let i = 0; i < count; i++) {
       if (!isInBounds(currentX, currentZ, bounds)) break;
 
       const effectiveRadius = clampRadiusToBounds(currentX, currentZ, maxRadius, bounds);
-      const result = finder.findNearestStructure(structure, currentX, currentZ, effectiveRadius);
+      const result = finder.findNearestStructure(structure, currentX, currentZ, effectiveRadius, foundPositions);
       if (!result) break;
-
-      if (result.distance === 0 && chain.length > 0) break;
       if (!isInBounds(result.x, result.z, bounds)) break;
+
+      // 通过距离为0判断是否找到的是同一个结构（双重保护）
+      if (result.distance === 0 && chain.length > 0) break;
 
       totalDistance += result.distance ?? 0;
       chain.push({
@@ -573,6 +575,7 @@ router.get("/locate/structure/chain", (req: Request, res: Response) => {
         inBounds: true,
       });
 
+      foundPositions.push({ x: result.x, z: result.z });
       currentX = result.x;
       currentZ = result.z;
     }

@@ -441,13 +441,22 @@ export class StructureFinder {
     structureId: string,
     centerX: number,
     centerZ: number,
-    maxRadius: number = 10000
+    maxRadius: number = 10000,
+    excludePositions?: Array<{ x: number; z: number }>
   ): StructureResult | null {
     if (!this.config || !this.generationContext) {
       throw new Error("StructureFinder not initialized");
     }
 
     const targetId = Identifier.parse(structureId);
+
+    // 构建排除集合（用于连锁查找时排除已找到的结构）
+    const excludeSet = new Set<string>();
+    if (excludePositions) {
+      for (const pos of excludePositions) {
+        excludeSet.add(`${pos.x >> 4},${pos.z >> 4}`);
+      }
+    }
 
     // 使用预构建的快速查找映射
     const relevantSets = this.structureToSetMap.get(structureId)
@@ -519,6 +528,10 @@ export class StructureFinder {
               const structure = set.getStructureInChunk(chunk[0], chunk[1], this.generationContext);
 
               if (structure && structure.id.equals(targetId)) {
+                // 跳过已排除的结构（用于连锁查找）
+                const chunkKey = `${chunk[0]},${chunk[1]}`;
+                if (excludeSet.has(chunkKey)) continue;
+
                 const actualDist = Math.sqrt(
                   Math.pow(structure.pos[0] - centerX, 2) + Math.pow(structure.pos[2] - centerZ, 2)
                 );
