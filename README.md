@@ -1,4 +1,4 @@
-# LiteFinder v1.3.0
+# LiteFinder v1.3.1
 
 基于 Olelabot Finder Gen2 修改而来的 Minecraft 世界生成分析工具，提供生物群系与结构查找的 HTTP API 服务。
 

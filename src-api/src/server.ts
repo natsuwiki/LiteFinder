@@ -28,7 +28,7 @@ ${colors.cyan}${colors.bright}
  ███████╗██║   ██║   ███████╗██║     ██║██║ ╚████║██████╔╝███████╗██║  ██║
  ╚══════╝╚═╝   ╚═╝   ╚══════╝╚═╝     ╚═╝╚═╝  ╚═══╝╚═════╝ ╚══════╝╚═╝  ╚═╝
 ${colors.reset}
-${colors.gray}  Version: ${colors.green}v1.3.0${colors.gray}  |  Author: ${colors.green}ONEGAME${colors.gray}  |  Based on: ${colors.green}Olelabot Finder Gen2${colors.reset}
+${colors.gray}  Version: ${colors.green}v1.3.1${colors.gray}  |  Author: ${colors.green}ONEGAME${colors.gray}  |  Based on: ${colors.green}Olelabot Finder Gen2${colors.reset}
 ${colors.gray}  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}
 `;
   console.log(banner);
@@ -96,7 +96,7 @@ async function startWorker() {
   app.get("/", (_req, res) => {
     res.json({
       name: "LiteFinder",
-      version: "v1.3.0",
+      version: "v1.3.1",
       pid: process.pid,
       config: {
         seed: CONFIG.seed,

@@ -1,6 +1,6 @@
 # LiteFinder x1.2 - 支持的功能列表
 
-> 版本: v1.3.0（基于 Olelabot Finder Gen2）
+> 版本: v1.3.1（基于 Olelabot Finder Gen2）
 > 作者: ONEGAME
 > Minecraft 版本: 1.21.7  
 > 数据包: `main_tectonic-datapack-3.0.13 (1).zip` + `Dungeons and Taverns v4.7.3.zip` + `Amplified_Nether_1.21_v1.2.11.zip` + `blooming-biosphere-v1.1.11.zip` + `Cliffs and Coves v1.3.1.zip` + `CliffTree 3.0.2 [1.21.5 - 1.21.10].zip` + `Navigable Rivers v1.5.0.zip` + `Nullscape_1.21_v1.2.14.zip` + `William Wythers' Overhauled Overworld v2.6.0.zip`

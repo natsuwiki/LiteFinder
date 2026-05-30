@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ========================================
-echo   LiteFinder v1.3.0
+echo   LiteFinder v1.3.1
 echo   Minecraft World Generation Analyzer
 echo ========================================
 echo.

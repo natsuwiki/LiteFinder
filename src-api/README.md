@@ -1,4 +1,4 @@
-# LiteFinder v1.3.0 — API 服务
+# LiteFinder v1.3.1 — API 服务
 
 基于 Olelabot Finder Gen2 修改而来的 Minecraft 世界生成分析 API 服务，底层使用 [deepslate](https://github.com/misode/deepslate)。
 
