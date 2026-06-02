@@ -91,13 +91,9 @@ class CachedBiomeSource implements BiomeSource {
    * 在检查每个区块的结构前必须调用
    */
   public setupCache(x: number, z: number): void {
-    // 仅在中心点变化较大时才清空缓存（利用局部性）
-    const dx = Math.abs(x - this.cache_center_x);
-    const dz = Math.abs(z - this.cache_center_z);
-    if (dx > CACHE_CENTER * 2 || dz > CACHE_CENTER * 2) {
-      this.cache.clear();
-      this.accessOrder.length = 0;
-    }
+    // 每次中心变化都必须清空缓存（cache_index使用相对坐标，中心移动后同一index对应不同世界坐标）
+    this.cache.clear();
+    this.accessOrder.length = 0;
     this.cache_center_x = x;
     this.cache_center_z = z;
   }
